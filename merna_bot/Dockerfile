@@ -1,17 +1,17 @@
-# استخدام نسخة تحتوي على Flutter
-FROM instrumentisto/flutter:stable AS build
+FROM dart:stable AS build
 
 WORKDIR /app
-# بما أن Root Directory هو merna_bot، منسخ الملفات فوراً
+
+# نسخ ملفات المشروع (بما أن Root هو merna_bot)
 COPY . .
 
-# تجهيز Flutter وجلب المكتبات
-RUN flutter pub get
-# بناء التطبيق كـ Executable
-RUN flutter build linux --release || dart compile exe bin/MillionGame.dart -o bin/main
+# جلب المكتبات وبناء الملف التشغيلي
+RUN dart pub get
+RUN dart compile exe bin/MillionGame.dart -o bin/main
 
+# بيئة التشغيل النهائية خفيفة جداً
 FROM debian:stable-slim
-# نقل الملف التشغيلي للبيئة النهائية
 COPY --from=build /app/bin/main /app/main
-# تشغيل البوت
+
+# تشغيل ميرنا
 CMD ["/app/main"]
