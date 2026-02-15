@@ -1,10 +1,17 @@
-FROM dart:stable AS build
-WORKDIR /app
-# بما أننا داخل merna_bot، انسخ كل شيء هنا
-COPY . .
-RUN dart pub get
-RUN dart compile exe bin/MillionGame.dart -o bin/main
+# استخدام نسخة تحتوي على Flutter
+FROM instrumentisto/flutter:stable AS build
 
-FROM subfuzion/dart:slim
-COPY --from=build /app/bin/main /app/bin/main
-CMD ["/app/bin/main"]
+WORKDIR /app
+# بما أن Root Directory هو merna_bot، منسخ الملفات فوراً
+COPY . .
+
+# تجهيز Flutter وجلب المكتبات
+RUN flutter pub get
+# بناء التطبيق كـ Executable
+RUN flutter build linux --release || dart compile exe bin/MillionGame.dart -o bin/main
+
+FROM debian:stable-slim
+# نقل الملف التشغيلي للبيئة النهائية
+COPY --from=build /app/bin/main /app/main
+# تشغيل البوت
+CMD ["/app/main"]
