@@ -9,4 +9,4 @@ COPY . .
 RUN dart pub get
 
 # تشغيل ملف البوت (تأكد من اسم الملف جوا مجلد bin، غالباً merna.dart)
-CMD ["dart", "run", "bin/merna.dart"]
+CMD ["dart", "run", "bin/main.dart"]
