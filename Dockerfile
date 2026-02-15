@@ -1,13 +1,17 @@
 FROM dart:stable AS build
+
 WORKDIR /app
-# نسخ المجلد بالكامل
+
+# نسخ ملفات المشروع (بما أن Root هو merna_bot)
 COPY . .
-# الدخول للمجلد اللي فيه الملفات
-WORKDIR /app/merna_bot
+
+# جلب المكتبات وبناء الملف التشغيلي
 RUN dart pub get
 RUN dart compile exe bin/MillionGame.dart -o bin/main
 
-FROM subfuzion/dart:slim
-COPY --from=build /app/merna_bot/bin/main /app/bin/main
-# تشغيل الملف
-CMD ["/app/bin/main"]
+# بيئة التشغيل النهائية خفيفة جداً
+FROM debian:stable-slim
+COPY --from=build /app/bin/main /app/main
+
+# تشغيل ميرنا
+CMD ["/app/main"]
