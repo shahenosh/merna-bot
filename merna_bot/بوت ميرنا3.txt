@@ -1,0 +1,318 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+import 'package:http/http.dart' as http;
+import 'package:html/parser.dart' show parse;
+import 'package:xmpp_stone/xmpp_stone.dart' as xmpp;
+
+// ===================== الإعدادات =====================
+const String OWNER_JID = "almuftrs@syriatalk.info";
+const String BOT_JID_STR = "tsunamei@syriatalk.info";
+const String BOT_PASS = "tsunamei123";
+const String BOT_NICK = "MΣЯПΛ";
+const String STATUS_TEXT = "بوت ميرنا لطلبي اضف almuftrs";
+// ===================================================
+
+void main() => MernaLegendBot().run();
+
+class MernaLegendBot {
+  late xmpp.Connection connection;
+  List<String> players = [];
+  String gameOwner = "";
+  String lastRoom = "";
+  final Random _random = Random();
+
+  final Map<String, int> horoIds = {
+    "الحمل": 1,
+    "الثور": 2,
+    "الجوزاء": 3,
+    "السرطان": 4,
+    "الأسد": 5,
+    "الاسد": 5,
+    "العذراء": 6,
+    "الميزان": 7,
+    "العقرب": 8,
+    "القوس": 9,
+    "الجدي": 10,
+    "الدلو": 11,
+    "الحوت": 12
+  };
+
+  final List<String> userDescriptions = [
+    "هاد الشخص متل الياسمينة الشامية، وين ما قعد بينشر ريحة طيبة 🌸",
+    "قلبه أبيض من التلج، بس لسانه بينقط عسل مهضوم 🍯",
+    "هاد العضو رايق وميوزك، بيحب القعدة الهادية وكاسة المتة 🧉",
+    "شخصية قوية ومهيبة، والكل بيحسبله ألف حساب بالروم 👑"
+  ];
+
+  final List<String> challenges = [
+    "غير نكك لـ (أنا دبة) لمدة 5 دقائق 🐼",
+    "اعترف بأكثر موقف محرج صار معك بالروم 😅",
+    "اكتب (أنا بحب ميرنا) 10 مرات ورا بعض بالروم ❤️",
+    "وشوش أغلى شخص عندك وقوله (أنت منور حياتي) 🌹",
+    "غني مقطع من أغنية حزينة هلق بالروم 🎤",
+    "أرسل بوسة (kiss) بالروم لأول شخص بيطلع بوشك 💋"
+  ];
+
+  final List<String> futurePredictions = [
+    "رح تفتح الثلاجة وما تلاقي شي تاكله وتنام حزين 🍗",
+    "في شخص هلق عم يفكر فيك وبده يبعتلك وشوشة بس متردد 💌",
+    "رح تصير مليونير بس لما يصير سعر الخبز بمليون 💰",
+    "بعد شوي رح تجيك رسالة تغير مودك للأحلى بكتير 😍",
+    "المستقبل بيقول إنك رح تنحظر بسبب كترة حكيك.. انتبه! 🚫",
+    "رح تلاقي 500 ليرة قديمة ببنطلونك الشتوي 👖",
+    "الناس رح تطلب توقيعك لأنك رح تصير أشهر عضو بالروم ✍️",
+    "رح تتزوج وحدة بتشبه ميرنا (يعني رح تعذبك) 👰",
+    "رح تلاقي كنز بحديقة بيتكم بس يطلعلك جني 🧞"
+  ];
+
+  final List<String> nudgeMessages = [
+    "تعال تشكل آسي وين غاطس؟ الروم شاعلة وأنت مو هون! 🌸",
+    "يا مو.. ليش هيك صافن ومانك معنا؟ فز حكيلك كلمتين! ☕",
+    "وينك يا بعدي؟ لا حس ولا خبر.. عسى ما شر؟ ✨",
+    "يا مية أهلا وسهلا، نكزناك لنشوف وين أراضيك! 🌙",
+    "شوبك يا عيوني؟ ليش هيك ساكت؟ حكيلك حكاية! 🕊️",
+    "لك تئبشني شو هالهيبة، بس لو ترد علينا وتطلع! 🎭",
+    "يؤبرني هالطول.. وين غايب؟ الحارة كلها عم تسأل عنك! 🏠",
+    "على عيني والله، بس صحصح معنا شوي وترك اللي بإيدك! 🍬"
+  ];
+
+  void run() {
+    _loadRoom();
+    var jid = xmpp.Jid.fromFullJid(BOT_JID_STR);
+    final settings = xmpp.XmppAccountSettings(
+        BOT_JID_STR, jid.local, jid.domain, BOT_PASS, 5222,
+        host: "syriatalk.info");
+    settings.resource = BOT_NICK;
+
+    connection = xmpp.Connection(settings);
+    connection.connect();
+
+    connection.connectionStateStream.listen((state) {
+      if (state == xmpp.XmppConnectionState.Authenticated) {
+        print("✅ ميرنا أونلاين - كل الميزات تعمل!");
+        _updatePresence();
+        _setup();
+        if (lastRoom.isNotEmpty)
+          Timer(Duration(seconds: 2), () => _join(lastRoom));
+      }
+    });
+  }
+
+  // --- دالة يوتيوب ---
+  Future<String> _searchYouTube(String query) async {
+    try {
+      final String searchUrl = "https://www.youtube.com/results?search_query=" +
+          Uri.encodeComponent(query);
+      final res = await http
+          .get(Uri.parse(searchUrl), headers: {'User-Agent': 'Mozilla/5.0'});
+      final RegExp reg = RegExp(r'"videoId":"([^"]+)"');
+      final Match? match = reg.firstMatch(res.body);
+      if (match != null) {
+        final String code = match.group(1) ?? "";
+        return "🎬 يوتيوب: " +
+            query +
+            "\n🔗 https://www.youtube.com/watch?v=" +
+            code;
+      }
+      return "❌ لم أجد نتائج.";
+    } catch (e) {
+      return "❌ خطأ يوتيوب.";
+    }
+  }
+
+  // --- دالة الأحلام ---
+  Future<String> _interpretDream(String dream) async {
+    try {
+      final String webUrl = "https://www.mktbtk.com/search?q=" +
+          Uri.encodeComponent("تفسير حلم " + dream);
+      final res = await http
+          .get(Uri.parse(webUrl), headers: {'User-Agent': 'Mozilla/5.0'});
+      var doc = parse(utf8.decode(res.bodyBytes));
+      String p = doc.querySelector('p')?.text.trim() ?? "";
+      if (p.length > 250) p = p.substring(0, 240) + "...";
+      return "🌙 تفسير الحلم:\n" + p;
+    } catch (e) {
+      return "❌ خطأ بالأحلام.";
+    }
+  }
+
+  // --- دالة الأبراج ---
+  Future<String> _fetchFromElabraj(String sign) async {
+    int? id = horoIds[sign];
+    if (id == null) return "يا غالي اكتب اسم البرج صح.";
+    try {
+      final url = Uri.parse(
+          "https://www.elabraj.net/ar/horoscope/daily/" + id.toString());
+      final res = await http.get(url, headers: {'User-Agent': 'Mozilla/5.0'});
+      var document = parse(utf8.decode(res.bodyBytes));
+      String mainText =
+          document.querySelector('.horoscope-daily-text')?.text.trim() ?? "";
+      var detailDivs =
+          document.querySelectorAll('.horoscope-daily-categories-item');
+      String details = "";
+      for (var item in detailDivs) {
+        details += "\n---\n" + item.text.trim();
+      }
+      return mainText + details;
+    } catch (e) {
+      return "❌ فشل جلب البرج.";
+    }
+  }
+
+  void _setup() {
+    xmpp.MessageHandler.getInstance(connection)
+        .messagesStream
+        .listen((msg) async {
+      if (msg == null || msg.body == null || msg.fromJid?.resource == BOT_NICK)
+        return;
+      final body = msg.body!.trim();
+      final senderNick = msg.fromJid?.resource ?? "عضو";
+      final isGroup = (msg.type == xmpp.MessageStanzaType.GROUPCHAT);
+
+      if (body.startsWith("يوتيوب ")) {
+        _send(
+            msg.fromJid!,
+            await _searchYouTube(body.replaceAll("يوتيوب ", "").trim()),
+            isGroup);
+      } else if (body.startsWith("تفسير ")) {
+        _send(
+            msg.fromJid!,
+            await _interpretDream(body.replaceAll("تفسير ", "").trim()),
+            isGroup);
+      } else if (body.startsWith("نكز ")) {
+        String target = body.replaceAll("نكز ", "").trim();
+        _send(
+            msg.fromJid!,
+            "👉 [" +
+                senderNick +
+                "] ينكز [" +
+                target +
+                "]\n📢 " +
+                nudgeMessages[_random.nextInt(nudgeMessages.length)],
+            isGroup);
+      } else if (body.startsWith("برج ")) {
+        _send(
+            msg.fromJid!,
+            "⏳ ثواني يا أكابر...\n" +
+                await _fetchFromElabraj(body.replaceAll("برج ", "").trim()),
+            isGroup);
+      } else if (body == "حظي") {
+        int luck = _random.nextInt(101);
+        _send(msg.fromJid!, "🎲 نسبة حظك اليوم: " + luck.toString() + "%",
+            isGroup);
+      } else if (body == "مستقبلي" || body == "مستقبل") {
+        _send(
+            msg.fromJid!,
+            "🔮 [" +
+                senderNick +
+                "]: " +
+                futurePredictions[_random.nextInt(futurePredictions.length)],
+            isGroup);
+      } else if (body == "تحدي") {
+        _send(
+            msg.fromJid!,
+            "🔥 تحدي لـ [" +
+                senderNick +
+                "]: " +
+                challenges[_random.nextInt(challenges.length)],
+            isGroup);
+      } else if (body == "حب") {
+        _send(
+            msg.fromJid!,
+            "❤️ نسبة الحب لـ [" +
+                senderNick +
+                "]: " +
+                _random.nextInt(101).toString() +
+                "%",
+            isGroup);
+      } else if (body.startsWith("حظي من ")) {
+        String target = body.replaceAll("حظي من ", "").trim();
+        _send(
+            msg.fromJid!,
+            "❤️ [" +
+                senderNick +
+                "] حظك من [" +
+                target +
+                "] هو: " +
+                _random.nextInt(101).toString() +
+                "% ✨",
+            isGroup);
+      } else if (body.startsWith("وصف ")) {
+        String target = body.replaceAll("وصف ", "").trim();
+        _send(
+            msg.fromJid!,
+            "📝 وصف [" +
+                target +
+                "]: " +
+                userDescriptions[_random.nextInt(userDescriptions.length)],
+            isGroup);
+      } else if (body == "تست") {
+        _send(msg.fromJid!, "📢 [$senderNick] شغال  ✅", isGroup);
+      } else if (body == "تصميم") {
+        _send(
+            msg.fromJid!,
+            "🤖 أنا بوت ميرنا، تم تصميمي وتطويري بواسطة : almuftrs@syriatalk.info 🌸",
+            isGroup);
+      } else if (body.toLowerCase() == "بوت") {
+        _send(
+            msg.fromJid!,
+            "نعم يا عيوني.. البوت معك، شوبدك يا [" + senderNick + "]؟",
+            isGroup);
+      } else if (msg.fromJid?.userAtDomain == OWNER_JID) {
+        if (body.startsWith("اذهب ")) {
+          lastRoom = body.split(" ")[1];
+          _saveRoom(lastRoom);
+          _join(lastRoom);
+        } else if (body == "غادر") {
+          _leave(lastRoom);
+        } else if (body == "ريستارت") exit(0);
+      }
+
+      // لعبة الاسئلة
+      if (body.startsWith("لعبة الاسئلة")) {
+        players =
+            body.replaceAll("لعبة الاسئلة", "").trim().split(RegExp(r'\s+'));
+        players.removeWhere((i) => i.isEmpty);
+        if (players.length >= 2) {
+          gameOwner = senderNick;
+          _send(msg.fromJid!, "🎲 بدأت اللعبة! (فت) للدور.", isGroup);
+        }
+      } else if (body == "فت" && players.isNotEmpty) {
+        String p1 = players[_random.nextInt(players.length)];
+        String p2 = players[_random.nextInt(players.length)];
+        while (p1 == p2) p2 = players[_random.nextInt(players.length)];
+        _send(msg.fromJid!, "🎙️ [" + p1 + "] يسأل [" + p2 + "]", isGroup);
+      }
+    });
+  }
+
+  void _updatePresence() {
+    var p = xmpp.PresenceStanza();
+    p.status = STATUS_TEXT;
+    connection.writeStanza(p);
+  }
+
+  void _join(String r) => connection.write("<presence to='" +
+      r +
+      "/" +
+      BOT_NICK +
+      "'><x xmlns='http://jabber.org/protocol/muc'/></presence>");
+  void _leave(String r) => connection
+      .write("<presence to='" + r + "/" + BOT_NICK + "' type='unavailable'/>");
+  void _send(xmpp.Jid to, String txt, bool gp) {
+    final s = xmpp.MessageStanza(xmpp.AbstractStanza.getRandomId(),
+        gp ? xmpp.MessageStanzaType.GROUPCHAT : xmpp.MessageStanzaType.CHAT);
+    String target = gp ? (to.local + "@" + to.domain) : (to.fullJid ?? "");
+    s.toJid = xmpp.Jid.fromFullJid(target);
+    s.body = txt;
+    connection.writeStanza(s);
+  }
+
+  void _saveRoom(String r) => File("room.txt").writeAsStringSync(r);
+  void _loadRoom() {
+    if (File("room.txt").existsSync())
+      lastRoom = File("room.txt").readAsStringSync();
+  }
+}
