@@ -9,4 +9,5 @@ COPY . .
 RUN dart pub get
 
 # تشغيل البوت الأساسي مباشرة
-CMD ["dart", "run", "bin/merna.dart"]
+CMD ["dart", "run", "bin/main.dart"]
+
